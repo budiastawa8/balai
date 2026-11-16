@@ -6,7 +6,7 @@ SaaS asisten AI berbasis **knowledge per workspace (tenant)**. Uji di web dulu, 
 
 - Auth multi-user (Clerk)
 - Multi-tenant workspace + isolasi knowledge
-- Upload knowledge (teks / `.txt` / `.md` / `.pdf`) + indexing RAG (pgvector)
+- Upload knowledge (teks / `.txt` / `.md` / `.pdf` / `.docx` / `.xlsx` / `.csv`) + indexing RAG (pgvector)
 - Chat uji di dashboard (jawab hanya dari knowledge)
 - Abstraksi multi-channel + stub/wiring Fonnte webhook
 

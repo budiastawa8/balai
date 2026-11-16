@@ -3,24 +3,9 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { documents } from "@/db/schema";
-import { extractTextFromPdf } from "@/lib/rag/extract-pdf";
+import { extractTextFromFile } from "@/lib/rag/extract-file";
 import { indexDocument } from "@/lib/rag/index-document";
 import { assertTenantAccess } from "@/lib/tenants";
-
-async function extractTextFromFile(
-  file: File,
-): Promise<{ text: string; sourceType: string }> {
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".pdf")) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const text = await extractTextFromPdf(buffer);
-    return { text, sourceType: "pdf" };
-  }
-
-  const text = await file.text();
-  if (name.endsWith(".md")) return { text, sourceType: "markdown" };
-  return { text, sourceType: "text" };
-}
 
 export async function POST(request: Request) {
   const { userId } = await auth();

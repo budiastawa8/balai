@@ -125,11 +125,13 @@ export function KnowledgePanel({ tenantId }: { tenantId: string }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="file">Atau unggah file (.txt, .md, .pdf)</Label>
+          <Label htmlFor="file">
+            Atau unggah file (.txt, .md, .pdf, .docx, .xlsx, .csv)
+          </Label>
           <Input
             id="file"
             type="file"
-            accept=".txt,.md,.pdf,text/plain,application/pdf"
+            accept=".txt,.md,.pdf,.docx,.xlsx,.xls,.csv,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
         </div>
