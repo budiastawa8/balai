@@ -16,6 +16,20 @@ type DocRow = {
   createdAt: string;
 };
 
+async function readApiJson(res: Response): Promise<Record<string, unknown>> {
+  const raw = await res.text();
+  if (!raw.trim()) {
+    throw new Error(
+      `Server tidak merespons (HTTP ${res.status}). File mungkin terlalu besar, proses timeout, atau server crash saat membaca PDF.`,
+    );
+  }
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new Error(`Respons server tidak valid (HTTP ${res.status}).`);
+  }
+}
+
 export function KnowledgePanel({ tenantId }: { tenantId: string }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [title, setTitle] = useState("");
@@ -26,9 +40,9 @@ export function KnowledgePanel({ tenantId }: { tenantId: string }) {
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/knowledge?tenantId=${tenantId}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Gagal memuat knowledge");
-    setDocs(data.documents || []);
+    const data = await readApiJson(res);
+    if (!res.ok) throw new Error(String(data.error || "Gagal memuat knowledge"));
+    setDocs((data.documents as DocRow[]) || []);
   }, [tenantId]);
 
   useEffect(() => {
@@ -55,8 +69,8 @@ export function KnowledgePanel({ tenantId }: { tenantId: string }) {
           body: JSON.stringify({ tenantId, title, content }),
         });
       }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload gagal");
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(String(data.error || "Upload gagal"));
       setTitle("");
       setContent("");
       setFile(null);
@@ -77,8 +91,8 @@ export function KnowledgePanel({ tenantId }: { tenantId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "reindex" }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Reindex gagal");
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(String(data.error || "Reindex gagal"));
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reindex gagal");
@@ -92,8 +106,8 @@ export function KnowledgePanel({ tenantId }: { tenantId: string }) {
     setError(null);
     try {
       const res = await fetch(`/api/knowledge/${docId}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Hapus gagal");
+      const data = await readApiJson(res);
+      if (!res.ok) throw new Error(String(data.error || "Hapus gagal"));
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Hapus gagal");

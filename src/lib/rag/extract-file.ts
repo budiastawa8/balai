@@ -9,6 +9,11 @@ export async function extractTextFromFile(
 
   if (name.endsWith(".pdf")) {
     const text = await extractTextFromPdf(buffer);
+    if (!text.trim()) {
+      throw new Error(
+        `PDF ${file.name} tidak berisi teks yang bisa diindeks (mungkin hasil scan/gambar). Ubah ke PDF berteks, DOCX, atau tempel teks manual.`,
+      );
+    }
     return { text, sourceType: "pdf" };
   }
 

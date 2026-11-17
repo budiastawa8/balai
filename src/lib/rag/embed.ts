@@ -1,5 +1,6 @@
 /** gemini-embedding-001 with Matryoshka output size */
 export const EMBEDDING_DIM = 768;
+const EMBED_BATCH_SIZE = 16;
 
 function getApiKey() {
   const key = process.env.GEMINI_API_KEY;
@@ -16,9 +17,23 @@ type BatchEmbedResponse = {
   error?: { message?: string };
 };
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
-  if (texts.length === 0) return [];
+async function parseJsonResponse(response: Response): Promise<BatchEmbedResponse> {
+  const raw = await response.text();
+  if (!raw.trim()) {
+    throw new Error(
+      `Gemini embed mengembalikan respons kosong (HTTP ${response.status}). Coba lagi sebentar.`,
+    );
+  }
+  try {
+    return JSON.parse(raw) as BatchEmbedResponse;
+  } catch {
+    throw new Error(
+      `Gemini embed mengembalikan respons non-JSON (HTTP ${response.status}).`,
+    );
+  }
+}
 
+async function embedBatch(texts: string[]): Promise<number[][]> {
   const key = getApiKey();
   const model = embeddingModel().replace(/^models\//, "");
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents?key=${key}`;
@@ -35,7 +50,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     }),
   });
 
-  const data = (await response.json()) as BatchEmbedResponse;
+  const data = await parseJsonResponse(response);
   if (!response.ok) {
     throw new Error(data.error?.message || `Gemini embed HTTP ${response.status}`);
   }
@@ -56,6 +71,18 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     }
     return values;
   });
+}
+
+export async function embedTexts(texts: string[]): Promise<number[][]> {
+  if (texts.length === 0) return [];
+
+  const vectors: number[][] = [];
+  for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
+    const slice = texts.slice(i, i + EMBED_BATCH_SIZE);
+    const batch = await embedBatch(slice);
+    vectors.push(...batch);
+  }
+  return vectors;
 }
 
 export async function embedQuery(query: string): Promise<number[]> {

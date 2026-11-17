@@ -7,6 +7,11 @@ import { extractTextFromFile } from "@/lib/rag/extract-file";
 import { indexDocument } from "@/lib/rag/index-document";
 import { assertTenantAccess } from "@/lib/tenants";
 
+export const maxDuration = 60;
+
+/** Stay under common serverless body limits (~4.5MB on Vercel). */
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) {
@@ -21,13 +26,33 @@ export async function POST(request: Request) {
     let sourceType = "text";
 
     if (contentType.includes("multipart/form-data")) {
-      const form = await request.formData();
+      let form: FormData;
+      try {
+        form = await request.formData();
+      } catch {
+        return NextResponse.json(
+          {
+            error:
+              "Gagal membaca upload. File mungkin terlalu besar atau koneksi terputus. Maksimal 4MB.",
+          },
+          { status: 400 },
+        );
+      }
+
       tenantId = String(form.get("tenantId") || "");
       title = String(form.get("title") || "");
       const file = form.get("file");
       const pasted = form.get("content");
 
       if (file instanceof File && file.size > 0) {
+        if (file.size > MAX_FILE_BYTES) {
+          return NextResponse.json(
+            {
+              error: `File terlalu besar (${(file.size / (1024 * 1024)).toFixed(1)}MB). Maksimal 4MB.`,
+            },
+            { status: 413 },
+          );
+        }
         const extracted = await extractTextFromFile(file);
         content = extracted.text;
         sourceType = extracted.sourceType;
@@ -37,11 +62,22 @@ export async function POST(request: Request) {
         sourceType = "text";
       }
     } else {
-      const body = (await request.json()) as {
-        tenantId?: string;
-        title?: string;
-        content?: string;
-      };
+      let body: { tenantId?: string; title?: string; content?: string };
+      try {
+        body = (await request.json()) as {
+          tenantId?: string;
+          title?: string;
+          content?: string;
+        };
+      } catch {
+        return NextResponse.json(
+          {
+            error:
+              "Body request tidak valid. Kirim JSON atau multipart form-data.",
+          },
+          { status: 400 },
+        );
+      }
       tenantId = body.tenantId || "";
       title = body.title || "";
       content = body.content || "";

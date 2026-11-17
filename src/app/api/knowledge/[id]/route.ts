@@ -6,6 +6,8 @@ import { chunks, documents } from "@/db/schema";
 import { indexDocument } from "@/lib/rag/index-document";
 import { assertTenantAccess } from "@/lib/tenants";
 
+export const maxDuration = 60;
+
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function DELETE(_request: Request, context: RouteContext) {
