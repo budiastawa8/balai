@@ -1,44 +1,23 @@
-import { existsSync } from "node:fs";
-import { createRequire } from "node:module";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { PDFParse } from "pdf-parse";
-
 let workerReady = false;
 
-function resolvePdfPackageDir(): string {
-  try {
-    const require = createRequire(import.meta.url);
-    return path.dirname(require.resolve("pdf-parse/package.json"));
-  } catch {
-    return path.join(process.cwd(), "node_modules/pdf-parse");
-  }
-}
+type PdfParseModule = typeof import("pdf-parse");
+type PdfWorkerModule = typeof import("pdf-parse/worker");
 
-function ensurePdfWorker() {
-  if (workerReady) return;
+async function loadPdfParse(): Promise<{
+  PDFParse: PdfParseModule["PDFParse"];
+  CanvasFactory: PdfWorkerModule["CanvasFactory"];
+}> {
+  // Worker/canvas polyfills must load before pdf-parse (required on Vercel).
+  const worker = await import("pdf-parse/worker");
+  const { PDFParse } = await import("pdf-parse");
 
-  const pkgDir = resolvePdfPackageDir();
-  const candidates = [
-    path.join(pkgDir, "dist/pdf-parse/cjs/pdf.worker.mjs"),
-    path.join(pkgDir, "dist/pdf-parse/esm/pdf.worker.mjs"),
-    path.join(pkgDir, "dist/worker/pdf.worker.mjs"),
-    path.join(
-      process.cwd(),
-      "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
-    ),
-  ];
-
-  for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
-    PDFParse.setWorker(pathToFileURL(candidate).href);
+  if (!workerReady) {
+    // Inline worker data is more reliable on serverless than filesystem paths.
+    PDFParse.setWorker(worker.getData());
     workerReady = true;
-    return;
   }
 
-  // Last resort: let pdf-parse resolve its default worker path.
-  PDFParse.setWorker();
-  workerReady = true;
+  return { PDFParse, CanvasFactory: worker.CanvasFactory };
 }
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
@@ -46,11 +25,24 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
     throw new Error("File PDF kosong.");
   }
 
-  ensurePdfWorker();
+  let PDFParse: PdfParseModule["PDFParse"];
+  let CanvasFactory: PdfWorkerModule["CanvasFactory"];
+  try {
+    ({ PDFParse, CanvasFactory } = await loadPdfParse());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Gagal memuat parser PDF di server: ${message}. Pastikan @napi-rs/canvas terpasang.`,
+    );
+  }
 
   // pdf.js mutates/transfers TypedArrays — pass a copy.
   const data = new Uint8Array(buffer);
-  const parser = new PDFParse({ data, useWasm: false });
+  const parser = new PDFParse({
+    data,
+    useWasm: false,
+    CanvasFactory,
+  });
   try {
     const result = await parser.getText();
     return (result.text || "").trim();
